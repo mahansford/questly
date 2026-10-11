@@ -31,16 +31,116 @@
 
   /* ----------------------------------------------------- double-submit guard
      Stops an excited kid tapping "Buy" or "Done!" three times. */
-  document.querySelectorAll("form").forEach(function (form) {
-    form.addEventListener("submit", function () {
-      const buttons = form.querySelectorAll('button[type="submit"], button:not([type])');
-      setTimeout(function () {
-        buttons.forEach(function (b) {
-          b.disabled = true;
-          b.style.opacity = ".6";
-        });
-      }, 0);
-    });
+  document.addEventListener("submit", function (e) {
+    const form = e.target;
+    if (form.matches("[data-step-form]")) return;
+    const buttons = form.querySelectorAll('button[type="submit"], button:not([type])');
+    setTimeout(function () {
+      buttons.forEach(function (b) {
+        b.disabled = true;
+        b.style.opacity = ".6";
+      });
+    }, 0);
+  });
+
+  /* ----------------------------------------------------- step checklist
+     Ticks off steps without full-page reloads and reveals the Done button
+     smoothly when all steps are completed. */
+  document.addEventListener("submit", async function (e) {
+    const form = e.target.closest("[data-step-form]");
+    if (!form) return;
+
+    e.preventDefault();
+    e.stopPropagation();
+
+    const btn = form.querySelector("[data-step-btn]");
+    if (!btn || btn.disabled) return;
+
+    const questId = btn.getAttribute("data-quest-id");
+    const card = document.getElementById("quest-" + questId);
+    if (!card) return;
+
+    const box = btn.querySelector(".step__box");
+    const wasDone = btn.classList.contains("is-done");
+    const willBeDone = !wasDone;
+
+    // Optimistic toggle
+    btn.classList.toggle("is-done", willBeDone);
+    if (box) {
+      box.innerHTML = willBeDone ? "&#10003;" : "";
+    }
+
+    btn.disabled = true;
+
+    try {
+      const body = new FormData(form);
+      const res = await fetch(form.action, {
+        method: "POST",
+        body: body,
+        headers: {
+          "X-Requested-With": "XMLHttpRequest",
+          "Accept": "application/json"
+        }
+      });
+
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error || "Failed");
+
+      btn.classList.toggle("is-done", Boolean(data.ticked));
+      if (box) {
+        box.innerHTML = data.ticked ? "&#10003;" : "";
+      }
+
+      const countEl = card.querySelector(".steps__count");
+      if (countEl) {
+        countEl.textContent = data.steps_done + " of " + data.steps_total;
+      }
+
+      const actionEl = document.getElementById("quest-action-" + questId);
+      const footEl = document.getElementById("steps-foot-" + questId);
+      const csrfInput = form.querySelector('[name="_csrf"]');
+      const csrfVal = csrfInput ? csrfInput.value : "";
+      const finishUrl = "/me/quests/" + questId + "/done";
+
+      if (data.all_done) {
+        if (actionEl) {
+          actionEl.innerHTML = '<span class="stamp stamp--done">Steps done&nbsp;&#10003;</span>';
+        }
+        if (footEl) {
+          footEl.innerHTML =
+            '<form method="post" action="' + finishUrl + '">' +
+            '<input type="hidden" name="_csrf" value="' + csrfVal + '">' +
+            '<button class="btn btn--go" id="done-' + questId + '" type="submit">Done!</button>' +
+            '</form>';
+          footEl.classList.add("is-shown");
+          const bottomDone = footEl.querySelector("button");
+          if (bottomDone) {
+            bottomDone.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "nearest" });
+            bottomDone.classList.add("pulse");
+            setTimeout(function () { bottomDone.classList.remove("pulse"); }, 1000);
+          }
+        }
+      } else {
+        const left = data.steps_left;
+        if (actionEl) {
+          actionEl.innerHTML =
+            '<span class="stamp stamp--steps">' + left + " step" + (left === 1 ? "" : "s") + " left</span>";
+        }
+        if (footEl) {
+          footEl.classList.remove("is-shown");
+          footEl.innerHTML = "";
+        }
+      }
+    } catch (err) {
+      console.error("Step toggle failed:", err);
+      btn.classList.toggle("is-done", wasDone);
+      if (box) {
+        box.innerHTML = wasDone ? "&#10003;" : "";
+      }
+    } finally {
+      btn.disabled = false;
+    }
   });
 
   /* ----------------------------------------------------------- balance count */
@@ -261,5 +361,28 @@
         canvas.style.display = "none";
       }
     })(started);
+  }
+
+  /* ---------------------------------------------------- service worker */
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", function () {
+      navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch(function (err) {
+        console.warn("ServiceWorker registration failed:", err);
+      });
+    });
+  }
+
+  /* ---------------------------------------------------- install prompt */
+  window.addEventListener("beforeinstallprompt", function (e) {
+    window.deferredInstallPrompt = e;
+  });
+
+  /* ---------------------------------------------------- hash anchor scroll */
+  if (window.location.hash) {
+    const target = document.querySelector(window.location.hash);
+    if (target && window.location.hash.startsWith("#done-")) {
+      target.classList.add("pulse");
+      setTimeout(function () { target.classList.remove("pulse"); }, 1000);
+    }
   }
 })();

@@ -8,12 +8,15 @@ Software Foundation, either version 3 of the License, or (at your option) any
 later version. See the LICENSE file, or <https://www.gnu.org/licenses/>.
 """
 
+import mimetypes
 import os
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from flask import Flask, g, render_template, request, session
 from markupsafe import Markup
+
+mimetypes.add_type("application/manifest+json", ".webmanifest")
 
 try:  # local development convenience; in Docker the env comes from compose
     from dotenv import load_dotenv

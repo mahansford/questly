@@ -97,7 +97,7 @@
           <span>Repeats</span>
           <select name="repeat">
             {% for r in repeats %}
-              <option value="{{ r }}" {{ 'selected' if q.repeat == r }}>{{ r | capitalize }}</option>
+              <option value="{{ r }}" {{ 'selected' if q.repeat == r or (r == 'weekday' and q.repeat == 'weekdays') }}>{{ r | capitalize }}</option>
             {% endfor %}
           </select>
         </label>

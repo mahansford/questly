@@ -266,7 +266,7 @@ def quests():
     return render_template("parent/quests.html",
                            quests=list_quests(db, active_only=False),
                            kids=list_kids(db),
-                           repeats=REPEAT_CHOICES)
+                           repeats=[r for r in REPEAT_CHOICES if r != "weekdays"])
 
 
 @bp.post("/quests")
@@ -279,6 +279,8 @@ def create_quest():
         return redirect(url_for("parent.quests"))
 
     repeat = request.form.get("repeat", "daily")
+    if repeat == "weekdays":
+        repeat = "weekday"
     assigned = [oid(v) for v in request.form.getlist("assigned_to")]
     db.quests.insert_one({
         "title": title,
@@ -317,6 +319,8 @@ def update_quest(quest_id):
         flash(f"Removed '{quest['title']}'.", "info")
     else:
         repeat = request.form.get("repeat", quest.get("repeat", "daily"))
+        if repeat == "weekdays":
+            repeat = "weekday"
         assigned = [oid(v) for v in request.form.getlist("assigned_to")]
         db.quests.update_one({"_id": quest["_id"]}, {"$set": {
             "title": request.form.get("title", quest["title"]).strip()[:80] or quest["title"],

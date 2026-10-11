@@ -151,6 +151,7 @@ def main():
         ("icon-192.png", 192, False),
         ("icon-512.png", 512, False),
         ("apple-touch-icon.png", 180, False),
+        ("icon-maskable-192.png", 192, True),
         ("icon-maskable-512.png", 512, True),
     ]:
         render_png(size, maskable).save(OUT / name, optimize=True)

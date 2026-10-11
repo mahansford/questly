@@ -69,28 +69,34 @@
             {% endif %}
           </p>
         </div>
-        {% if q.state == 'open' and q.steps_left %}
+        <div class="quest__action" id="quest-action-{{ q._id }}">
+        {% if q.state == 'open' and q.steps_total and q.steps_left %}
           <span class="stamp stamp--steps">{{ q.steps_left }} step{{ '' if q.steps_left == 1 else 's' }} left</span>
+        {% elif q.state == 'open' and q.steps_total %}
+          <span class="stamp stamp--done">Steps done&nbsp;&#10003;</span>
         {% elif q.state == 'open' %}
           <form method="post" action="{{ url_for('kid.finish_quest', quest_id=q._id) }}">
             {{ csrf_field() }}
-            <button class="btn btn--go" type="submit">Done!</button>
+            <button class="btn btn--go" id="done-{{ q._id }}" type="submit">Done!</button>
           </form>
         {% elif q.state == 'pending' %}
           <span class="stamp stamp--wait">Waiting&nbsp;&#9203;</span>
         {% else %}
           <span class="stamp stamp--done">Done&nbsp;&#9989;</span>
         {% endif %}
+        </div>
         {% if q.steps_total and q.state != 'done' %}
-          <details class="steps" {{ 'open' if q.steps_left }}>
-            <summary>Steps &middot; {{ q.steps_done }} of {{ q.steps_total }}</summary>
+          <details class="steps" {{ 'open' if (q.steps_left or q.state == 'open') }} id="steps-{{ q._id }}">
+            <summary>Steps &middot; <span class="steps__count">{{ q.steps_done }} of {{ q.steps_total }}</span></summary>
             <ul class="steplist">
               {% for t in q.subtasks %}
-                <li>
+                <li id="step-{{ q._id }}-{{ t.id }}">
                   <form method="post"
-                        action="{{ url_for('kid.tick_step', quest_id=q._id, subtask_id=t.id) }}">
+                        action="{{ url_for('kid.tick_step', quest_id=q._id, subtask_id=t.id) }}"
+                        data-step-form>
                     {{ csrf_field() }}
-                    <button type="submit" class="step {{ 'is-done' if t.id in q.ticked }}">
+                    <button type="submit" class="step {{ 'is-done' if t.id in q.ticked }}"
+                            data-step-btn data-quest-id="{{ q._id }}" data-subtask-id="{{ t.id }}">
                       <span class="step__box">{{ '&#10003;' | safe if t.id in q.ticked }}</span>
                       <span class="step__text">{{ t.text }}</span>
                     </button>
@@ -98,6 +104,12 @@
                 </li>
               {% endfor %}
             </ul>
+            <div class="steps__foot {{ 'is-shown' if (q.state == 'open' and not q.steps_left) else '' }}" id="steps-foot-{{ q._id }}">
+              <form method="post" action="{{ url_for('kid.finish_quest', quest_id=q._id) }}">
+                {{ csrf_field() }}
+                <button class="btn btn--go" id="done-{{ q._id }}" type="submit">Done!</button>
+              </form>
+            </div>
           </details>
         {% endif %}
       </article>

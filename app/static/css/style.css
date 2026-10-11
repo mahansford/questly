@@ -1061,6 +1061,38 @@ p.field--full { flex: 1 1 100%; margin: 0; }
 .step.is-done .step__box { background: var(--mint); border-color: var(--mint); }
 .step.is-done .step__text { text-decoration: line-through; color: var(--ink-3); }
 
+.quest,
+.step,
+.steplist > li,
+[id^="done-"],
+[id^="quest-"],
+[id^="step-"] {
+  scroll-margin-top: calc(75px + env(safe-area-inset-top, 0px));
+}
+
+.quest__action {
+  display: flex;
+  align-items: center;
+}
+
+.steps__foot {
+  display: none;
+  margin-top: 10px;
+}
+.steps__foot.is-shown {
+  display: flex;
+  justify-content: flex-end;
+}
+
+@keyframes btn-attention {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.04); }
+  100% { transform: scale(1); }
+}
+.pulse {
+  animation: btn-attention .4s ease;
+}
+
 .field textarea {
   width: 100%;
   padding: 11px 14px;

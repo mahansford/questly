@@ -39,6 +39,19 @@ def favicon():
     )
 
 
+@bp.get("/sw.js")
+def service_worker():
+    """Serve the PWA service worker from root scope with Service-Worker-Allowed."""
+    response = send_from_directory(
+        os.path.join(current_app.root_path, "static"),
+        "sw.js",
+        mimetype="application/javascript",
+    )
+    response.headers["Service-Worker-Allowed"] = "/"
+    response.headers["Cache-Control"] = "no-cache"
+    return response
+
+
 @bp.get("/healthz")
 def healthz():
     try:

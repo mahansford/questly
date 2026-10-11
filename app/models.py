@@ -32,7 +32,7 @@ COLORS = [
     ("lime", "#8bc34a"),
 ]
 
-REPEAT_CHOICES = ["daily", "weekly", "once"]
+REPEAT_CHOICES = ["daily", "weekday", "weekdays", "weekly", "once"]
 
 STOCK_PERIODS = ["daily", "weekly", "monthly"]
 STOCK_SCOPES = ["child", "family"]
@@ -88,7 +88,7 @@ def oid(value):
 
 def period_key(repeat, local_now):
     """Which bucket a claim or purchase falls into, in the family's local time."""
-    if repeat == "daily":
+    if repeat in ("daily", "weekday", "weekdays"):
         return local_now.strftime("%Y-%m-%d")
     if repeat == "weekly":
         year, week, _ = local_now.isocalendar()
@@ -100,7 +100,7 @@ def period_key(repeat, local_now):
 
 def period_started(period, local_now):
     """The moment the current period began, as an aware UTC datetime."""
-    if period == "daily":
+    if period in ("daily", "weekday", "weekdays"):
         start = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
     elif period == "weekly":
         start = (local_now - timedelta(days=local_now.weekday())).replace(
@@ -641,14 +641,20 @@ def quest_claims_in_period(db, quest, kid, key):
 
 def quests_for_kid(db, kid, local_now):
     """Active quests assigned to this kid, annotated with how many times
-    they've done it this period and whether another go is available."""
+    they've done it this period and whether another go is available.
+    Sorted so quests yet to be marked as done appear at the top."""
     out = []
     for quest in list_quests(db, active_only=True):
         assigned = quest.get("assigned_to") or []
         if assigned and kid["_id"] not in assigned:
             continue
 
-        key = period_key(quest.get("repeat", "daily"), local_now)
+        repeat = quest.get("repeat", "daily")
+        # Weekday-only quests are hidden on weekends (Saturday=5, Sunday=6)
+        if repeat in ("weekday", "weekdays") and local_now.weekday() >= 5:
+            continue
+
+        key = period_key(repeat, local_now)
         limit = quest_times(quest)
         claims = quest_claims_in_period(db, quest, kid, key)
         approved = sum(1 for c in claims if c["status"] == "approved")
@@ -673,6 +679,9 @@ def quests_for_kid(db, kid, local_now):
         else:
             quest["state"] = "done"
         out.append(quest)
+
+    state_order = {"open": 0, "pending": 1, "done": 2}
+    out.sort(key=lambda q: (state_order.get(q.get("state"), 99), (q.get("title") or "").lower()))
     return out
 
 
@@ -681,7 +690,11 @@ def claim_quest(db, quest, kid, local_now):
     may allow several goes per period."""
     from pymongo.errors import DuplicateKeyError
 
-    key = period_key(quest.get("repeat", "daily"), local_now)
+    repeat = quest.get("repeat", "daily")
+    if repeat in ("weekday", "weekdays") and local_now.weekday() >= 5:
+        return None, "This quest is only available on weekdays."
+
+    key = period_key(repeat, local_now)
     limit = quest_times(quest)
     used = len(quest_claims_in_period(db, quest, kid, key))
     if used >= limit:
@@ -730,7 +743,7 @@ def claim_quest(db, quest, kid, local_now):
 
 
 def _quest_all_done(quest, limit):
-    per = {"daily": "today", "weekly": "this week"}.get(
+    per = {"daily": "today", "weekday": "today", "weekdays": "today", "weekly": "this week"}.get(
         quest.get("repeat", "daily"), "already")
     if limit == 1:
         return "You've already sent that one in."

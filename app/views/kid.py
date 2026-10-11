@@ -1,4 +1,4 @@
-from flask import (Blueprint, flash, g, redirect, render_template, request,
+from flask import (Blueprint, flash, g, jsonify, redirect, render_template, request,
                    session, url_for)
 
 from ..db import get_db
@@ -153,18 +153,50 @@ def tick_step(quest_id, subtask_id):
     """Tick or untick one step of a quest."""
     db = get_db()
     quest = get_quest(db, quest_id)
+    is_ajax = (
+        request.headers.get("X-Requested-With") == "XMLHttpRequest"
+        or (request.accept_mimetypes.accept_json and not request.accept_mimetypes.accept_html)
+    )
     if not quest or not quest.get("active"):
+        if is_ajax:
+            return jsonify({"ok": False, "error": "That quest has gone away."}), 404
         flash("That quest has gone away.", "error")
         return redirect(url_for("kid.home"))
 
     assigned = quest.get("assigned_to") or []
     if assigned and g.user["_id"] not in assigned:
+        if is_ajax:
+            return jsonify({"ok": False, "error": "That quest isn't yours."}), 403
         flash("That quest isn't yours.", "error")
         return redirect(url_for("kid.home"))
 
-    key = period_key(quest.get("repeat", "daily"), local_now())
-    toggle_subtask(db, quest, g.user, key, subtask_id)
-    return redirect(url_for("kid.home") + f"#quest-{quest['_id']}")
+    repeat = quest.get("repeat", "daily")
+    if repeat in ("weekday", "weekdays") and local_now().weekday() >= 5:
+        if is_ajax:
+            return jsonify({"ok": False, "error": "This quest is only available on weekdays."}), 400
+        flash("This quest is only available on weekdays.", "warn")
+        return redirect(url_for("kid.home"))
+
+    key = period_key(repeat, local_now())
+    done = toggle_subtask(db, quest, g.user, key, subtask_id)
+    subtasks = quest.get("subtasks") or []
+    all_done = bool(subtasks and len(done) >= len(subtasks))
+
+    if is_ajax:
+        return jsonify({
+            "ok": True,
+            "quest_id": quest_id,
+            "subtask_id": subtask_id,
+            "ticked": subtask_id in done,
+            "steps_done": len(done),
+            "steps_total": len(subtasks),
+            "steps_left": max(0, len(subtasks) - len(done)),
+            "all_done": all_done,
+        })
+
+    if all_done:
+        return redirect(url_for("kid.home") + f"#done-{quest['_id']}")
+    return redirect(url_for("kid.home") + f"#step-{quest['_id']}-{subtask_id}")
 
 
 @bp.get("/news")
